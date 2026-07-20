@@ -9,7 +9,10 @@
 <body class="bg-gray-100 min-h-screen p-6">
   <div class="max-w-7xl mx-auto">
     <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
-      <h1 class="text-3xl font-bold mb-2">Laporan Barang & Lokasi Barang</h1>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0"> 📡 WIFI 📡 <span id="dbStatus" class="badge bg-secondary fs-6">Checking Connection...</span></h3>
+</div>
+<h1 class="text-3xl font-bold mb-2">Laporan Barang & Lokasi Barang</h1>
       <p class="text-gray-600">Kategori: MODEM, ADAPTOR, SPLITTER 1/8, SPLITTER 1/4, SPLITTER 1/2, KABEL</p>
     </div>
 
@@ -124,6 +127,536 @@
     <div class="bg-white rounded-2xl shadow-lg p-6 mt-6">
       <h2 class="text-2xl font-semibold mb-4">Rekap Barang Keluar</h2>
       <div id="rekap" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FTTH ODP</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+<style>
+.table{
+    font-size:12px !important;
+}
+.table th,.table td{
+    padding:4px !important;
+    white-space:nowrap;
+}
+body{
+    font-size:14px;
+}
+</style>
+
+
+<style>
+.table{
+    font-size:15px !important;
+}
+.table th,
+.table td{
+    font-size:15px !important;
+    
+    padding:6px !important;
+}
+
+.table th{
+    font-size:14px !important;
+}
+
+
+</style>
+
+
+<style>
+.table thead th{
+    font-weight:bold !important;
+}
+.table tbody td{
+    font-weight:normal !important;
+}
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- Supabase SDK & Bootstrap JS Bundle -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</head>
+<body class="bg-light">
+</div>
+</div>
+
+<!-- Supabase Settings Modal -->
+<div class="modal fade" id="supabaseSettingsModal" tabindex="-1" aria-labelledby="supabaseSettingsModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="supabaseSettingsModalLabel">âš™ï¸ Konfigurasi Supabase</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label for="modalSupabaseUrl" class="form-label">Supabase URL</label>
+          <input type="text" class="form-control" id="modalSupabaseUrl" placeholder="https://xxxx.supabase.co">
+        </div>
+        <div class="mb-3">
+          <label for="modalSupabaseAnonKey" class="form-label">Supabase Anon Key</label>
+          <input type="password" class="form-control" id="modalSupabaseAnonKey" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+        </div>
+        <div class="mb-3">
+          <label for="modalSupabaseTable" class="form-label">Nama Tabel</label>
+          <input type="text" class="form-control" id="modalSupabaseTable" value="ftth_data" placeholder="ftth_data">
+        </div>
+        <div class="alert alert-info py-2" style="font-size: 13px;">
+          <strong>Info:</strong> Kredensial ini disimpan di LocalStorage peramban Anda secara lokal dan aman. Jika dikosongkan, aplikasi kembali menggunakan penyimpanan lokal bawaan.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+        <button type="button" class="btn btn-primary" onclick="simpanConfigSupabase()">Simpan Pengaturan</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = "https://tlwhvpfdixkagsdxeymp.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_tOxtMAecYtBAkl1nKoobVw_nUgPvu-b"; 
+const SUPABASE_TABLE = "ftth_data";
+
+let supabaseClient = null;
+let data = [];
+let editIndex = -1;
+
+function getRedamanColor(valStr) {
+    if (!valStr || !valStr.toString().trim()) return 'white';
+    const cleanStr = valStr.toString().trim().toLowerCase();
+    if (cleanStr === 'offline') return 'red';
+
+    const val = parseFloat(cleanStr);
+    if (isNaN(val)) return 'white';
+
+    // -23.99 ke atas = hijau
+    if (val >= -23.99) {
+        return 'green';
+    }
+    // -24.00 sampai -24.99 = merah muda
+    else if (val >= -24.99) {
+        return 'deeppink';
+    }
+    // -25.00 sampai -30.00 (dan lebih rendah) = merah
+    else {
+        return 'red';
+    }
+}
+
+function getSupabaseConfig() {
+    let url = SUPABASE_URL;
+    let key = SUPABASE_ANON_KEY;
+    let tableName = SUPABASE_TABLE || "ftth_data";
+
+    if (!url || !key || key.includes("MASUKKAN") || key === "") {
+        url = localStorage.getItem("supabaseUrl") || "";
+        key = localStorage.getItem("supabaseAnonKey") || "";
+        tableName = localStorage.getItem("supabaseTable") || "ftth_data";
+    }
+    return { url, key, tableName };
+}
+
+function loadConfigValues() {
+    const { url, key, tableName } = getSupabaseConfig();
+    document.getElementById("modalSupabaseUrl").value = url;
+    document.getElementById("modalSupabaseAnonKey").value = key;
+    document.getElementById("modalSupabaseTable").value = tableName;
+}
+
+async function initSupabase() {
+    const { url, key, tableName } = getSupabaseConfig();
+    const statusBadge = document.getElementById("dbStatus");
+
+    if (url && key && !key.includes("MASUKKAN") && key !== "") {
+        try {
+
+            supabaseClient = window.supabase.createClient(url, key);
+            
+            // Test connection by fetching 1 row
+            const { data: testData, error } = await supabaseClient.from(tableName).select('id').limit(1);
+            if (error) throw error;
+            
+            statusBadge.innerText = "Supabase Connected";
+            statusBadge.className = "badge bg-success fs-6";
+            return true;
+        } catch (err) {
+            console.error("Supabase connection failed:", err);
+            statusBadge.innerText = "Supabase Connection Error";
+            statusBadge.className = "badge bg-danger fs-6";
+            supabaseClient = null;
+            return false;
+        }
+    } else {
+        statusBadge.innerText = "LocalStorage Mode";
+        statusBadge.className = "badge bg-secondary fs-6";
+        supabaseClient = null;
+        return false;
+    }
+}
+
+async function loadData() {
+    const isSupabase = await initSupabase();
+    if (isSupabase) {
+        try {
+            const { tableName } = getSupabaseConfig();
+            const { data: dbData, error } = await supabaseClient
+                .from(tableName)
+                .select('*')
+                .order('created_at', { ascending: false });
+            if (error) throw error;
+            data = dbData || [];
+        } catch (err) {
+            alert("Gagal memuat data dari Supabase: " + err.message);
+            data = JSON.parse(localStorage.getItem("ftthData") || "[]");
+        }
+    } else {
+        data = JSON.parse(localStorage.getItem("ftthData") || "[]");
+    }
+    render();
+}
+
+async function simpanConfigSupabase() {
+    const url = document.getElementById("modalSupabaseUrl").value.trim();
+    const key = document.getElementById("modalSupabaseAnonKey").value.trim();
+    const table = document.getElementById("modalSupabaseTable").value.trim() || "ftth_data";
+
+    if (url === SUPABASE_URL || !url) {
+        localStorage.removeItem("supabaseUrl");
+    } else {
+        localStorage.setItem("supabaseUrl", url);
+    }
+
+    if (key === SUPABASE_ANON_KEY || !key) {
+        localStorage.removeItem("supabaseAnonKey");
+    } else {
+        localStorage.setItem("supabaseAnonKey", key);
+    }
+
+    if (table === SUPABASE_TABLE) {
+        localStorage.removeItem("supabaseTable");
+    } else {
+        localStorage.setItem("supabaseTable", table);
+    }
+
+
+    const modalEl = document.getElementById('supabaseSettingsModal');
+    const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    modal.hide();
+
+    // Reload
+    await loadData();
+}
+
+function render(){
+    const tb = document.getElementById("tb");
+    tb.innerHTML="";
+    let totalPencarian=0;
+    const keyword=(document.getElementById("cariPelanggan")?.value || "").toLowerCase();
+    data.forEach((d,i)=>{
+
+        if(keyword){
+            const searchText = (
+                (d.redaman || "") + " " +
+                (d.pelanggan || "") + " " +
+                (d.nama_modem || "") + " " +
+                (d.nomor_odp || "") + " " +
+                (d.olt || "") + " " +
+                (d.pon || "") + " " +
+                (d.mikrotik || "") + " " +
+                (d.port_odp || "")
+            ).toLowerCase();
+
+            if(!searchText.includes(keyword)) return;
+        }
+
+        totalPencarian++;
+        
+    });
+
+    document.getElementById('jumlahPencarian').innerText=totalPencarian;
+
+    if(keyword.trim() !== ""){
+        document.getElementById('boxJumlahPencarian').style.display='block';
+    }else{
+        document.getElementById('boxJumlahPencarian').style.display='none';
+    }
+}
+
+function ambilKoordinat(){
+    const input = document.getElementById("koordinat");
+
+    if (!navigator.geolocation) {
+        alert("Browser Anda tidak mendukung fitur lokasi/GPS.");
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+        function(position) {
+            const lat = position.coords.latitude.toFixed(6);
+            const lng = position.coords.longitude.toFixed(6);
+            input.value = lat + ", " + lng;
+        },
+        function(error) {
+            let pesan = "Gagal mengambil koordinat.";
+            if (error.code === error.PERMISSION_DENIED) {
+                pesan = "Izin lokasi ditolak. Silakan izinkan akses lokasi pada browser.";
+            } else if (error.code === error.POSITION_UNAVAILABLE) {
+                pesan = "Lokasi tidak tersedia.";
+            } else if (error.code === error.TIMEOUT) {
+                pesan = "Waktu pengambilan lokasi habis. Silakan coba lagi.";
+            }
+            alert(pesan);
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0
+        }
+    );
+}
+
+async function simpan(){
+    const pelangganInput = document.getElementById("pelanggan");
+    const modemInput = document.getElementById("nama_modem");
+    const koordinatInput = document.getElementById("koordinat");
+    const oltInput = document.getElementById("olt");
+    const ponInput = document.getElementById("pon");
+    const mikrotikInput = document.getElementById("mikrotik");
+    const nomorOdpInput = document.getElementById("nomor_odp");
+    const portOdpInput = document.getElementById("port_odp");
+    const redamanInput = document.getElementById("redaman");
+    const btnSimpan = document.getElementById("btnSimpan");
+
+    const item={
+        pelanggan: pelangganInput.value,
+        nama_modem: modemInput.value,
+        koordinat: koordinatInput.value,
+        olt: oltInput.value,
+        pon: ponInput.value,
+        mikrotik: mikrotikInput.value,
+        nomor_odp: nomorOdpInput.value,
+        port_odp: portOdpInput.value,
+        redaman: redamanInput.value
+    };
+
+    if (supabaseClient) {
+        try {
+            const { tableName } = getSupabaseConfig();
+            if (editIndex == -1) {
+                const { error } = await supabaseClient.from(tableName).insert([item]);
+                if (error) throw error;
+            } else {
+                const originalItem = data[editIndex];
+                if (originalItem.id) {
+                    const { error } = await supabaseClient.from(tableName).update(item).eq('id', originalItem.id);
+                    if (error) throw error;
+                } else {
+                    alert("Data tidak memiliki ID Supabase, tidak bisa di-update.");
+                    return;
+                }
+                editIndex = -1;
+                btnSimpan.innerText = "Simpan";
+            }
+        } catch (err) {
+            alert("Gagal menyimpan ke Supabase: " + err.message);
+            return;
+        }
+    } else {
+
+        if (editIndex == -1) {
+            data.push(item);
+        } else {
+            data[editIndex] = item;
+            editIndex = -1;
+            btnSimpan.innerText = "Simpan";
+        }
+        localStorage.setItem("ftthData", JSON.stringify(data));
+    }
+
+    await loadData();
+
+    pelangganInput.value = "";
+    modemInput.value = "";
+    koordinatInput.value = "";
+    oltInput.value = "";
+    ponInput.value = "";
+    mikrotikInput.value = "";
+    nomorOdpInput.value = "";
+    portOdpInput.value = "";
+    redamanInput.value = "";
+
+}
+
+async function hapusData(i){
+    if(confirm("Hapus data ini?")){
+        const item = data[i];
+        if (supabaseClient) {
+            try {
+                const { tableName } = getSupabaseConfig();
+                if (item.id) {
+                    const { error } = await supabaseClient.from(tableName).delete().eq('id', item.id);
+                    if (error) throw error;
+                } else {
+                    alert("Data tidak memiliki ID Supabase, tidak bisa dihapus di database.");
+                    return;
+                }
+            } catch (err) {
+                alert("Gagal menghapus dari Supabase: " + err.message);
+                return;
+            }
+        } else {
+            data.splice(i,1);
+            localStorage.setItem("ftthData",JSON.stringify(data));
+        }
+        await loadData();
+    }
+}
+
+function exportExcel(){
+    const excelData = data.map(d=>({
+        "Nama Pelanggan": d.pelanggan,
+        "Nama Modem": d.nama_modem || "",
+        "Koordinat": d.koordinat,
+        "OLT": d.olt,
+        "PON": d.pon,
+        "MikroTik": d.mikrotik || "",
+        "Nama ODP": d.nomor_odp,
+        "Port ODP": d.port_odp,
+        "Redaman": d.redaman
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(excelData);
+    const wb = XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(wb, ws, "FTTH");
+    XLSX.writeFile(wb, "FTTH_Data.xlsx");
+}
+
+function exportPDF(){
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    doc.text("FTTH",14,15);
+
+    doc.autoTable({
+        startY:20,
+        styles:{
+            fontSize:6,
+            cellPadding:1
+        },
+        headStyles:{
+            fontSize:7
+        },
+        head:[[
+            "Nama Pelanggan",
+            "Nama Modem",
+            "Koordinat",
+            "OLT",
+            "PON",
+            "MikroTik",
+            "Nama ODP",
+            "Port",
+            "Redaman"
+        ]],
+
+        body:data.map(d=>[
+            d.pelanggan,
+            d.nama_modem || "",
+            d.koordinat,
+            d.olt,
+            d.pon,
+            d.mikrotik || "",
+            d.nomor_odp,
+            d.port_odp,
+            d.redaman
+        ]),
+
+        didParseCell: function(dataCell){
+            if(dataCell.section === 'body' && dataCell.column.index === 8){
+                const redamanStr = dataCell.cell.raw;
+                const color = getRedamanColor(redamanStr);
+                if(color === 'red'){
+                    dataCell.cell.styles.textColor = [255,0,0];
+                    dataCell.cell.styles.fontStyle = 'bold';
+                }
+                else if(color === 'green'){
+                    dataCell.cell.styles.textColor = [0,128,0];
+                    dataCell.cell.styles.fontStyle = 'bold';
+                }
+                else if(color === 'deeppink'){
+                    dataCell.cell.styles.textColor = [255,20,147];
+                    dataCell.cell.styles.fontStyle = 'bold';
+                } else {
+                    dataCell.cell.styles.textColor = [0,0,0]; // default black
+                }
+            }
+        }
+    });
+
+    doc.save("FTTH_Data.pdf");
+}
+
+async function importExcel(event){
+    const file = event.target.files[0];
+    if(!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = async function(e){
+        const workbook = XLSX.read(e.target.result,{type:'binary'});
+        const sheetName = workbook.SheetNames[0];
+        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+        const newItems = rows.map(r=>({
+            pelanggan: r["Nama Pelanggan"] !== undefined ? String(r["Nama Pelanggan"]) : "",
+            nama_modem: r["Nama Modem"] !== undefined ? String(r["Nama Modem"]) : "",
+            koordinat: r["Koordinat"] !== undefined ? String(r["Koordinat"]) : "",
+            olt: r["OLT"] !== undefined ? String(r["OLT"]) : "",
+            pon: r["PON"] !== undefined ? String(r["PON"]) : "",
+            mikrotik: r["MikroTik"] !== undefined ? String(r["MikroTik"]) : "",
+            nomor_odp: r["Nama ODP"] !== undefined ? String(r["Nama ODP"]) : "",
+            port_odp: r["Port ODP"] !== undefined ? String(r["Port ODP"]) : "",
+            redaman: r["Redaman"] !== undefined ? String(r["Redaman"]) : ""
+        }));
+
+        if (supabaseClient) {
+            try {
+                const { tableName } = getSupabaseConfig();
+                const { error } = await supabaseClient.from(tableName).insert(newItems);
+                if (error) throw error;
+                alert("Import Excel berhasil ke Supabase");
+            } catch (err) {
+                alert("Gagal mengimpor ke Supabase: " + err.message);
+                return;
+            }
+        } else {
+            data.push(...newItems);
+            localStorage.setItem("ftthData",JSON.stringify(data));
+            alert("Import Excel berhasil ke LocalStorage");
+        }
+
+        await loadData();
+    };
+
+    reader.readAsBinaryString(file);
+}
+
+// Initialization on startup
+loadConfigValues();
+loadData();
+</script>
+</body>
+</html>
+
     </div>
   </div>
 
